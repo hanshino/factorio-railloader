@@ -124,6 +124,7 @@ data:extend{
 
 local univ = util.table.deepcopy(data.raw["inserter"]["railunloader-inserter"])
 univ.name = "railunloader-universal-inserter"
+univ.localised_name = {"entity-name.railunloader-inserter"}
 univ.filter_count = nil
 data:extend{univ}
 

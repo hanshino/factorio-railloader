@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.0.3
+Date: 2026-08-10
+  Features:
+    - Add complete Traditional Chinese (zh-TW) localization.
+  Bugfixes:
+    - Add missing English item names and allowed-item setting labels.
+    - Give the hidden unloader inserter the correct localized name.
+---------------------------------------------------------------------------------------------------
 Version: 2.0.2
 Date: 2026-08-10
   Bugfixes:
