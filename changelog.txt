@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.0.1
+Date: 2026-08-10
+  Changes:
+    - Update the Mod Portal thumbnail/cover image; no game content or behavior changes.
+---------------------------------------------------------------------------------------------------
 Version: 2.0.0
   Changes:
     - Port to Factorio 2.0. Fork of railloader 1.1.6 by Therax.

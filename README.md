@@ -1,5 +1,7 @@
 # Bulk Rail Loaders (Continued)
 
+![Bulk Rail Loader industrial railway banner](resources/github-banner.png)
+
 A Factorio 2.0 port of [Bulk Rail Loaders](https://github.com/mspielberg/factorio-railloader)
 by Therax, based on v1.1.6. This is a faithful port: gameplay, balance, and
 prototype names are unchanged from the original. See `NOTICE` for attribution
