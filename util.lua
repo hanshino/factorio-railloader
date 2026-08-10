@@ -187,6 +187,21 @@ function M.railloader_type(name)
   return string.match(name, "^rail(u?n?loader)%-")
 end
 
+-- Entities whose construction means "build a (un)loader here": the placement proxy
+-- the player/robot actually places, and the chest, which is what a blueprint
+-- captures when it was not rewritten into a proxy.
+--
+-- This must NOT match the mod's own internal entities (railloader-rail,
+-- -inserter, -universal-inserter, -interface-inserter, -structure-*), which all
+-- share the "rail(un)loader-" prefix. Those entities are created by
+-- create_entities() itself, and blueprints capture railloader-rail, so a robot
+-- reviving a captured rail ghost used to re-enter the loader construction path
+-- and try to place a rail on top of itself.
+function M.railloader_build_type(name)
+  return string.match(name, "^rail(u?n?loader)%-placement%-proxy$")
+    or string.match(name, "^rail(u?n?loader)%-chest$")
+end
+
 -- the mod's own rail prototype, placed underneath every (un)loader.
 -- 2.0 renamed the 1.1 rail prototypes to legacy-straight-rail and introduced a new
 -- straight-rail, so filtering by type alone also matches rails the player laid.

@@ -56,11 +56,15 @@ local function sync_interface_inserters(loader)
         position = loader.position,
         force = loader.force,
       }
-      inserter.destructible = false
-      inserter.pickup_position = type == "loader" and interface_chest.position or main_chest_position
-      inserter.drop_position = type == "unloader" and interface_chest.position or main_chest_position
-      inserter.direction = inserter.direction
-      inserter_config.connect_and_configure_inserter_control_behavior(inserter, loader)
+      -- interface inserters are a convenience: if one cannot be placed, skip this
+      -- chest rather than erroring out and aborting the whole (un)loader
+      if inserter then
+        inserter.destructible = false
+        inserter.pickup_position = type == "loader" and interface_chest.position or main_chest_position
+        inserter.drop_position = type == "unloader" and interface_chest.position or main_chest_position
+        inserter.direction = inserter.direction
+        inserter_config.connect_and_configure_inserter_control_behavior(inserter, loader)
+      end
     end
   end
 end
@@ -112,6 +116,16 @@ local function rail_positions(proxy)
   end
 end
 
+-- Builds every internal entity of a (un)loader, or nothing at all.
+--
+-- surface.create_entity returns nil when something already occupies the target
+-- position -- most importantly another railloader-rail belonging to a neighbouring
+-- (un)loader, or a rail the player laid themselves. Every created entity is
+-- therefore recorded so a later failure can be rolled back completely: a partially
+-- built (un)loader (rails but no chest, or a chest with no inserters) is not
+-- recoverable by the player and corrupts later mining/blueprint logic.
+--
+-- Returns true on success, or false if nothing was left behind.
 local function create_entities(proxy, tags, rail_poss)
   local type = util.railloader_type(proxy.name)
   local surface = proxy.surface
@@ -124,32 +138,76 @@ local function create_entities(proxy, tags, rail_poss)
   local force = proxy.force
   local last_user = proxy.last_user
 
+  -- Snapshot everything we need off the proxy *before* creating anything, because
+  -- rollback may destroy entities and the proxy itself must stay untouched until
+  -- we know the build succeeded.
+  local proxy_connections = util.get_circuit_connections(proxy)
+  local ghost_connections = ghostconnections.get_connections(proxy)
+
+  local created = {}
+  local function create(spec)
+    local entity = surface.create_entity(spec)
+    if entity then
+      created[#created+1] = entity
+    end
+    return entity
+  end
+  local function rollback()
+    -- destroy in reverse creation order
+    for i = #created, 1, -1 do
+      local entity = created[i]
+      if entity.valid then
+        entity.destroy()
+      end
+    end
+  end
+
   -- place rails
   for _, rail_position in ipairs(rail_poss) do
-    local rail = surface.create_entity{
-      name = "railloader-rail",
-      position = rail_position,
-      direction = direction,
-      force = force,
-    }
+    -- A blueprint of a built (un)loader captures the hidden railloader-rail, so a
+    -- robot may already have built one of our own rails here before reviving the
+    -- proxy/chest ghost. Such a rail is indistinguishable from one we would place,
+    -- so adopt it instead of failing the whole build. It is deliberately not added
+    -- to `created`: it existed before us, so a rollback must leave it alone.
+    local rail = surface.find_entity(util.rail_name, rail_position)
+    if rail and rail.direction ~= direction then
+      -- wrong orientation: not usable for this (un)loader
+      rail = nil
+    end
+    if not rail then
+      rail = create{
+        name = util.rail_name,
+        position = rail_position,
+        direction = direction,
+        force = force,
+      }
+    end
+    if not rail then
+      rollback()
+      return false
+    end
     rail.destructible = false
     rail.minable = false
   end
 
   -- place chest
-  local chest = surface.create_entity{
+  local chest = create{
     name = "rail" .. type .. "-chest",
     position = position,
     force = force,
   }
+  if not chest then
+    rollback()
+    return false
+  end
   chest.last_user = last_user
   if tags and tags.bar then
     chest.get_inventory(defines.inventory.chest).set_bar(tags.bar)
   end
 
   -- recreate circuit connections
-  util.copy_circuit_connections(proxy, chest)
-  util.apply_circuit_connections(chest, ghostconnections.get_connections(proxy))
+  util.apply_circuit_connections(chest, proxy_connections)
+  util.apply_circuit_connections(chest, ghost_connections)
 
   -- place cargo wagon inserters
   local inserter_name =
@@ -158,32 +216,45 @@ local function create_entities(proxy, tags, rail_poss)
     -- alternate direction to support half-size wagons sticking out both sides of the (un)loader
     -- 2.0 has 16 directions, so a 180 degree turn is +8 instead of +4
     local inserter_direction = (direction + (i-1) * 8) % 16
-    local inserter = surface.create_entity{
+    local inserter = create{
       name = inserter_name,
       position = position,
       direction = inserter_direction,
       force = force,
     }
+    if not inserter then
+      rollback()
+      return false
+    end
     inserter.destructible = false
     inserter_config.connect_and_configure_inserter_control_behavior(inserter, chest)
   end
-
-  inserter_config.configure_or_register_loader(chest)
 
   -- place structure
   local structure_name = "rail" .. type .. "-structure-vertical"
   if direction == defines.direction.east or direction == defines.direction.west then
     structure_name = "rail" .. type .. "-structure-horizontal"
   end
-  local placed = surface.create_entity{
+  local placed = create{
     name = structure_name,
     position = position,
     force = force,
   }
+  if not placed then
+    rollback()
+    return false
+  end
   placed.destructible = false
+
+  -- From here on the (un)loader is complete; only bookkeeping is left. Registering
+  -- the loader is deferred until after the structure so a rollback never leaves a
+  -- destroyed chest sitting in the work queue.
+  inserter_config.configure_or_register_loader(chest)
 
   -- place interface inserters for pre-existing chests
   sync_interface_inserters(chest)
+
+  return true
 end
 
 local function on_railloader_proxy_built(event)
@@ -193,7 +264,12 @@ local function on_railloader_proxy_built(event)
   if not rail_pos then
     return abort_build(event)
   end
-  create_entities(proxy, tags, rail_pos)
+  if not create_entities(proxy, tags, rail_pos) then
+    -- Something (usually a rail belonging to an adjacent (un)loader, or one the
+    -- player laid) blocks a position we need. Nothing was built; refund the proxy
+    -- through the normal path instead of leaving a half-built (un)loader.
+    return abort_build(event)
+  end
   proxy.destroy()
 end
 
@@ -213,11 +289,11 @@ end
 
 local function on_built(event)
   local entity = event.entity
-  local type = util.railloader_type(entity.name)
+  local type = util.railloader_build_type(entity.name)
   if type then
     return on_railloader_proxy_built(event)
   elseif entity.type == "entity-ghost" then
-    type = util.railloader_type(entity.ghost_name)
+    type = util.railloader_build_type(entity.ghost_name)
     if type then
       return on_ghost_built(entity)
     end
@@ -258,7 +334,7 @@ local died_direction
 local function on_post_entity_died(event)
   local ghost = event.ghost
   if ghost then
-    local loader_type = util.railloader_type(ghost.ghost_name)
+    local loader_type = util.railloader_build_type(ghost.ghost_name)
     if loader_type then
       local new_ghost = ghost.surface.create_entity{
         name = "entity-ghost",
@@ -267,15 +343,22 @@ local function on_post_entity_died(event)
         direction = died_direction,
         position = ghost.position,
       }
-      new_ghost.last_user = ghost.last_user
-      ghost.destroy()
+      -- only replace the chest ghost once the proxy ghost actually exists,
+      -- otherwise the player silently loses the ghost entirely
+      if new_ghost then
+        new_ghost.last_user = ghost.last_user
+        ghost.destroy()
+      end
     end
   end
 end
 
 local function on_mined(event)
   local entity = event.entity
-  local type = util.railloader_type(entity.name)
+  -- only the chest (or a not-yet-converted proxy) represents a whole (un)loader;
+  -- matching the "rail(un)loader-" prefix loosely here would make a single mined
+  -- internal entity tear down everything in its bounding box
+  local type = util.railloader_build_type(entity.name)
   if type then
     died_direction = util.loader_direction(entity)
     return on_railloader_mined(entity, event.buffer)

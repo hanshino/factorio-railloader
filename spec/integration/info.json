@@ -1,0 +1,9 @@
+{
+  "name": "railloader-integration-test",
+  "version": "0.0.1",
+  "factorio_version": "2.0",
+  "title": "Bulk Rail Loader integration tests",
+  "author": "railloader-continued",
+  "description": "Headless regression tests for railloader-continued. Not shipped in the released mod.",
+  "dependencies": ["base", "railloader-continued"]
+}

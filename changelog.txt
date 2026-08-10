@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.0.2
+Date: 2026-08-10
+  Bugfixes:
+    - Fix a crash when construction robots rebuild internal rails captured by a blueprint.
+    - Fully roll back when any internal entity fails to build, preventing partial builds.
+    - Safely reuse shared internal rails between adjacent loaders.
+---------------------------------------------------------------------------------------------------
 Version: 2.0.1
 Date: 2026-08-10
   Changes:
