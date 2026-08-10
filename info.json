@@ -2,12 +2,12 @@
 	"name": "railloader-continued",
 	"version": "2.0.0",
 	"factorio_version": "2.0",
-	"title": "Bulk Rail Loader",
-	"author": "Therax",
+	"title": "Bulk Rail Loader (Continued)",
+	"author": "hanshino",
 	"contact": "https://github.com/hanshino/factorio-railloader",
 	"homepage": "https://github.com/hanshino/factorio-railloader",
 	"description": "Bulk train loader/unloader with buffer. Continued fork of railloader.",
-	"dependencies": [],
+	"dependencies": ["base >= 2.0"],
 	"package": {
 		"ignore":[
 			"resources/*"

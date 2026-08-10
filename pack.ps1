@@ -40,18 +40,42 @@ $packageRoot = Join-Path $tempRoot $packageName
 try {
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
 
-    $excluded = @('.git', 'pack.sh', 'pack.ps1', 'PORTING.md', 'spec', 'resources')
+    $excluded = @('.git', 'pack.sh', 'pack.ps1', 'publish.ps1', 'portal-description.md', 'PORTING.md', 'spec', 'resources')
+    # Mod Portal 明確拒收可執行檔（exe/bat/ps1/sh/py），回應是 InvalidModUpload。
+    # 用副檔名排除而非逐一列名，避免日後新增腳本時又被擋下。
+    $excludedExtensions = @('.zip', '.exe', '.bat', '.ps1', '.sh', '.py')
     Get-ChildItem -LiteralPath $modDir -Force | Where-Object {
         if ($_.PSIsContainer) {
             $excluded -notcontains $_.Name
         } else {
-            $_.Extension -ne '.zip' -and $excluded -notcontains $_.Name
+            $excludedExtensions -notcontains $_.Extension.ToLowerInvariant() -and $excluded -notcontains $_.Name
         }
     } | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination $packageRoot -Recurse -Force
     }
 
-    Compress-Archive -Path $packageRoot -DestinationPath $zipPath -CompressionLevel Optimal -Force
+    # 不可用 Compress-Archive：PowerShell 5.1 會把目錄分隔符寫成 Windows 反斜線，
+    # Mod Portal 會以 InvalidModUpload 拒收（zip 規範要求正斜線，Linux/macOS 客戶端也讀不到）。
+    # 因此手動建立 zip 條目，並明確使用正斜線。
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    if (Test-Path -LiteralPath $zipPath) {
+        Remove-Item -LiteralPath $zipPath -Force
+    }
+
+    $archive = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $prefixLength = $tempRoot.TrimEnd([char]92, [char]47).Length + 1
+        Get-ChildItem -LiteralPath $packageRoot -Recurse -Force -File | ForEach-Object {
+            $entryName = $_.FullName.Substring($prefixLength).Replace([char]92, [char]47)
+            [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $archive, $_.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+        }
+    } finally {
+        $archive.Dispose()
+    }
+
     Write-Output $zipPath
 } finally {
     if (Test-Path -LiteralPath $tempRoot) {
