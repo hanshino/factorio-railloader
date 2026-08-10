@@ -3,6 +3,32 @@
 本檔是階段一（忠實移植，不加功能）的施工圖。每一項都標明**檔案:行**、**改什麼**、**為什麼**。
 目標：行為與上游 1.1.6 一致，但跑在 Factorio 2.0.77。不改玩法、不改平衡、不加新功能。
 
+> ## 施工結果：階段一已完成（2026-08-10）
+>
+> 載入測試通過（`Prototype list checksum: 2130422175`，`--create` 回報 `Done.`）。
+> 施工中發現本檔**有 5 處與 2.0.77 實際行為不符**，已依實機探測修正，補記於此以免日後重踩：
+>
+> 1. **1-2-f 誤判**：`Recipe.lua` 並非「在 2.0 完全可用」。`Recipe.lua:18` 的
+>    `data.raw[type][name]` 會 nil-index crash — 2.0 不為「零個原型的類型」建立
+>    `data.raw` key。已加 `data.raw[type] and` 檢查。此檔仍應保留（xander 相容）。
+> 2. **1-3-h 誤判**：`show_error()` 不能「保持原樣」。`flying-text` **實體型別已於 2.0 移除**
+>    （base changelog L3240），照做會 crash。已改用 `create_local_flying_text`。
+>    `inserterconfig.lua` 的 `display_configuration_message()` 同一問題，本檔未列。
+> 3. **本檔完全未提的破壞**：`use_filters` 在 2.0 預設 `false`。實測設了濾器但未設此旗標的
+>    機械臂**照樣搬運非濾器物品**（coal 被搬 25 個 vs 設 true 後 0 個）。靜默、不 crash。
+> 4. **本檔完全未提的破壞**：`circuit_condition` 不可再包一層 `condition`
+>    （巢狀寫法不報錯但丟棄 `first_signal`）；`circuit_enable_disable` 預設 false，
+>    不設則「Disable rail loader」訊號無效。另 `spill_item_stack` 改單一 table 參數、
+>    `max_circuit_wire_distance` 改為 `get_max_circuit_wire_distance()` 方法。
+> 5. **行號與處數偏差**：`__railloader__` 是 12 處非 11；`configchange.lua` 的 `global`
+>    是 15 處非 12；`get_contents()` 在 `bulk.lua:170` 非 196；`created_entity` 是 3 處非 4。
+>    `orthogonal_direction` 已確認無呼叫者並刪除。
+>
+> **教訓**：本檔「已查證」的項目仍有 2 處誤判，且漏掉 4 個靜默破壞。
+> 靜默失效（不 crash 的行為變更）無法靠載入測試發現，只能靠實機斷言。
+>
+> 尚未驗證、需真人進遊戲操作的項目見「階段 1-5 遊戲內驗證清單」中未打勾者。
+
 ## 專案定位
 
 - **上游**：<https://github.com/mspielberg/factorio-railloader> v1.1.6（2022-07-20），LGPLv3

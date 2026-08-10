@@ -3,7 +3,7 @@ data:extend{
   {
     type = "item",
     name = "railloader",
-    icon = "__railloader__/graphics/icons/railloader.png",
+    icon = "__railloader-continued__/graphics/icons/railloader.png",
     icon_size = 32,
     subgroup = "transport",
     order = "a[train-system]-j[railloader]",

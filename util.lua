@@ -1,5 +1,73 @@
 local M = {}
 
+-- Circuit wire helpers
+--
+-- 2.0 removed LuaEntity::connect_neighbour, circuit_connection_definitions and
+-- defines.circuit_connector_id. Wires are now manipulated through LuaWireConnector
+-- obtained from LuaEntity::get_wire_connector(wire_connector_id, create_if_missing).
+
+local circuit_wire_connector_ids = {
+  defines.wire_connector_id.circuit_red,
+  defines.wire_connector_id.circuit_green,
+}
+
+M.circuit_wire_connector_ids = circuit_wire_connector_ids
+
+-- Connects `entity` to `target` with both the red and the green circuit wire.
+function M.connect_circuit_wires(entity, target)
+  for _, connector_id in ipairs(circuit_wire_connector_ids) do
+    entity.get_wire_connector(connector_id, true)
+      .connect_to(target.get_wire_connector(connector_id, true))
+  end
+end
+
+-- Returns an array of {connector_id = ..., target = LuaWireConnector} describing
+-- every circuit wire currently attached to `entity`. This is the 2.0 replacement
+-- for reading LuaEntity::circuit_connection_definitions.
+function M.get_circuit_connections(entity)
+  local out = {}
+  for _, connector_id in ipairs(circuit_wire_connector_ids) do
+    local connector = entity.get_wire_connector(connector_id, false)
+    if connector then
+      for _, connection in pairs(connector.connections) do
+        out[#out+1] = {
+          connector_id = connector_id,
+          target = connection.target,
+        }
+      end
+    end
+  end
+  return out
+end
+
+-- Applies connections previously returned by M.get_circuit_connections (or by
+-- ghostconnections.get_connections) to `entity`.
+function M.apply_circuit_connections(entity, connections)
+  for _, connection in ipairs(connections) do
+    entity.get_wire_connector(connection.connector_id, true)
+      .connect_to(connection.target)
+  end
+end
+
+-- Replicates every circuit wire attached to `from` onto `to`.
+function M.copy_circuit_connections(from, to)
+  M.apply_circuit_connections(to, M.get_circuit_connections(from))
+end
+
+-- 2.0 removed the "flying-text" entity type; LuaPlayer::create_local_flying_text
+-- is the replacement. The 1.1 flying-text entity was visible to every player on
+-- the surface, so show it to each of them to keep the same behaviour.
+function M.flying_text(surface, position, text)
+  for _, player in pairs(game.players) do
+    if player.valid and player.surface == surface then
+      player.create_local_flying_text{
+        text = text,
+        position = position,
+      }
+    end
+  end
+end
+
 -- Position adjustments
 
 function M.moveposition(position, offset)
@@ -44,18 +112,9 @@ function M.is_empty_box(box)
   return size_x < 0.01 and size_y < 0.01
 end
 
+-- 2.0 has 16 directions instead of 8, so a 180 degree turn is +8 instead of +4
 function M.opposite_direction(direction)
-  if direction >= 4 then
-    return direction - 4
-  end
-  return direction + 4
-end
-
-function M.orthogonal_direction(direction)
-  if direction < 6 then
-    return direction + 2
-  end
-  return 0
+  return (direction + 8) % 16
 end
 
 function M.position_key(entity)
@@ -128,9 +187,19 @@ function M.railloader_type(name)
   return string.match(name, "^rail(u?n?loader)%-")
 end
 
+-- the mod's own rail prototype, placed underneath every (un)loader.
+-- 2.0 renamed the 1.1 rail prototypes to legacy-straight-rail and introduced a new
+-- straight-rail, so filtering by type alone also matches rails the player laid.
+-- Always filter by name when looking for our own rail.
+M.rail_name = "railloader-rail"
+
+function M.is_railloader_rail(entity)
+  return entity.name == M.rail_name
+end
+
 function M.loader_direction(loader)
   local rail = loader.surface.find_entities_filtered{
-    type = "straight-rail",
+    name = M.rail_name,
     area = M.box_centered_at(loader.position, 0.6),
   }[1]
   if rail and rail.valid then
@@ -219,7 +288,11 @@ function M.insert_or_spill(entity, stack, inventories)
     end
   end
 
-  entity.surface.spill_item_stack(entity.position, stack)
+  -- 2.0 changed spill_item_stack to take a single table of parameters
+  entity.surface.spill_item_stack{
+    position = entity.position,
+    stack = stack,
+  }
   stack.clear()
 end
 

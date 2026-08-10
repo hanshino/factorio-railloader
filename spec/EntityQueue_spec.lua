@@ -4,7 +4,7 @@ function script.on_nth_tick(interval, handler)
   tick_handler = handler
 end
 
-global = {}
+storage = {}
 
 
 local EntityQueue = require "EntityQueue"

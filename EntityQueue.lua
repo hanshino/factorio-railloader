@@ -6,16 +6,16 @@ local Event = require "Event"
 local M = {}
 
 function M:register(entity)
-  global[self.name][entity.unit_number] = entity
+  storage[self.name][entity.unit_number] = entity
   Event.register_nth_tick(self.interval, self.on_tick)
 end
 
 local function unregister_helper(self, key)
-  local queue = global[self.name]
+  local queue = storage[self.name]
   if queue[key] then
     -- ensure iter always holds a valid key
-    if key == global[self.iter_name] then
-      global[self.iter_name] = next(queue, key)
+    if key == storage[self.iter_name] then
+      storage[self.iter_name] = next(queue, key)
     end
     queue[key] = nil
     if not next(queue) then
@@ -29,15 +29,15 @@ function M:unregister(entity)
 end
 
 function M:on_init()
-  global[self.name] = {}
+  storage[self.name] = {}
 end
 
 function M:on_load()
-  local queue = global[self.name]
+  local queue = storage[self.name]
   local iter_name = self.iter_name
   if queue and next(queue) then
-    if global[iter_name] and not queue[global[iter_name]] then
-      global[iter_name] = nil
+    if storage[iter_name] and not queue[storage[iter_name]] then
+      storage[iter_name] = nil
     end
     Event.register_nth_tick(self.interval, self.on_tick)
   end
@@ -45,15 +45,15 @@ end
 
 local function create_on_tick(self)
   self.on_tick = function()
-    local queue = global[self.name]
+    local queue = storage[self.name]
     local iter_name = self.iter_name
-    if not queue[global[iter_name]] then
-      global[iter_name] = nil
+    if not queue[storage[iter_name]] then
+      storage[iter_name] = nil
     end
     local k, v
     repeat
-      k, v = next(queue, global[iter_name])
-      global[iter_name] = k
+      k, v = next(queue, storage[iter_name])
+      storage[iter_name] = k
       if not k and not next(queue) then
         -- table is empty
         Event.unregister_nth_tick(self.interval, self.on_tick)

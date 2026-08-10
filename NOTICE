@@ -1,0 +1,29 @@
+railloader-continued
+====================
+
+This mod is a derivative work of "Bulk Rail Loaders" (internal name: railloader)
+by Therax (mspielberg), ported to Factorio 2.0.
+
+  Original project : https://github.com/mspielberg/factorio-railloader
+  Baseline version : v1.1.6 (2022-07-20)
+  Original author  : Therax (mspielberg)
+  License          : GNU Lesser General Public License v3.0 (LGPLv3)
+
+This derivative work is distributed under the same license (LGPLv3). The full
+license text is preserved unmodified in the LICENSE file accompanying this mod.
+
+Graphics
+--------
+
+The loader and unloader graphics were created by Arch666Angel and are
+distributed by the original project under the LGPLv3. That attribution is
+carried forward here and must be preserved in any further redistribution:
+
+  * Arch666Angel for the loader graphics.
+
+Changes from the baseline
+-------------------------
+
+This fork ports the mod from Factorio 1.1 to Factorio 2.0. It is intended as a
+faithful port: gameplay, balance, and prototype names are unchanged from
+v1.1.6. See changelog.txt for details.

@@ -12,7 +12,7 @@ local num_inserters = 2
 local allowed_items_setting = settings.global["railloader-allowed-items"].value
 
 local function on_init()
-  global.previous_opened_blueprint_for = {}
+  storage.previous_opened_blueprint_for = {}
   delaydestroy.on_init()
   inserter_config.on_init()
 end
@@ -23,22 +23,18 @@ local function on_load()
 end
 
 local function on_configuration_changed(configuration_changed_data)
-  local mod_change = configuration_changed_data.mod_changes["railloader"]
+  local mod_change = configuration_changed_data.mod_changes["railloader-continued"]
   if mod_change and mod_change.old_version and mod_change.old_version ~= mod_change.new_version then
     configchange.on_mod_version_changed(mod_change.old_version)
   end
 end
 
 local function show_error(entity)
-  entity.surface.create_entity{
-    name = "flying-text",
-    position = entity.position,
-    text = {"railloader.invalid-position"},
-  }
+  util.flying_text(entity.surface, entity.position, {"railloader.invalid-position"})
 end
 
 local function abort_build(event)
-  local entity = event.created_entity or event.entity
+  local entity = event.entity
   show_error(entity)
   if event.player_index then
     local player = game.players[event.player_index]
@@ -120,8 +116,9 @@ local function create_entities(proxy, tags, rail_poss)
   local type = util.railloader_type(proxy.name)
   local surface = proxy.surface
   local direction = proxy.direction
-  if direction >= 4 then
-    direction = direction - 4
+  -- normalize to north/east; 2.0 doubled every direction value (south 4 -> 8, west 6 -> 12)
+  if direction >= defines.direction.south then
+    direction = direction - defines.direction.south
   end
   local position = proxy.position
   local force = proxy.force
@@ -151,19 +148,16 @@ local function create_entities(proxy, tags, rail_poss)
   end
 
   -- recreate circuit connections
-  for _, ccd in ipairs(proxy.circuit_connection_definitions) do
-    chest.connect_neighbour(ccd)
-  end
-  for _, ccd in ipairs(ghostconnections.get_connections(proxy)) do
-    chest.connect_neighbour(ccd)
-  end
+  util.copy_circuit_connections(proxy, chest)
+  util.apply_circuit_connections(chest, ghostconnections.get_connections(proxy))
 
   -- place cargo wagon inserters
   local inserter_name =
     "rail" .. type .. (allowed_items_setting == "any" and "-universal" or "") .. "-inserter"
   for i=1,num_inserters do
     -- alternate direction to support half-size wagons sticking out both sides of the (un)loader
-    local inserter_direction = (direction + (i-1) * 4) % 8
+    -- 2.0 has 16 directions, so a 180 degree turn is +8 instead of +4
+    local inserter_direction = (direction + (i-1) * 8) % 16
     local inserter = surface.create_entity{
       name = inserter_name,
       position = position,
@@ -193,7 +187,7 @@ local function create_entities(proxy, tags, rail_poss)
 end
 
 local function on_railloader_proxy_built(event)
-  local proxy = event.created_entity or event.entity
+  local proxy = event.entity
   local tags = event.tags
   local rail_pos = rail_positions(proxy)
   if not rail_pos then
@@ -218,7 +212,7 @@ local function on_container_built(entity)
 end
 
 local function on_built(event)
-  local entity = event.created_entity or event.entity
+  local entity = event.entity
   local type = util.railloader_type(entity.name)
   if type then
     return on_railloader_proxy_built(event)
@@ -244,7 +238,7 @@ local function on_railloader_mined(entity, buffer)
       ent.destroy()
     elseif string.find(ent.name, "^railu?n?loader%-structure") then
       ent.destroy()
-    elseif ent.type == "straight-rail" then
+    elseif util.is_railloader_rail(ent) then
       local success = ent.destroy()
       if not success then
         delaydestroy.register_to_destroy(ent)
@@ -302,7 +296,7 @@ local function on_gui_closed(event)
   and event.item.is_blueprint
   and event.item.is_blueprint_setup()
   then
-    global.previous_opened_blueprint_for[event.player_index] = {
+    storage.previous_opened_blueprint_for[event.player_index] = {
       blueprint = event.item,
       tick = event.tick,
     }
@@ -310,7 +304,7 @@ local function on_gui_closed(event)
 end
 
 local function get_blueprint_to_setup(player_index)
-  local opened_blueprint = global.previous_opened_blueprint_for[player_index]
+  local opened_blueprint = storage.previous_opened_blueprint_for[player_index]
   if opened_blueprint and opened_blueprint.tick == game.tick then
     return opened_blueprint.blueprint
   end
@@ -348,7 +342,7 @@ local function on_blueprint(event)
       if not chest_entity then goto continue end
 
       local rail = player.surface.find_entities_filtered{
-        type = "straight-rail",
+        name = util.rail_name,
         area = chest_entity.bounding_box,
       }[1]
       if not rail then goto continue end
@@ -374,7 +368,7 @@ end
 
 -- setup remotes
 
-remote.add_interface("railloader", {
+remote.add_interface("railloader-continued", {
   add_bulk_item = bulk.add_bulk_item,
   add_bulk_item_pattern = bulk.add_bulk_item_pattern,
 })

@@ -1,4 +1,14 @@
-# Bulk Rail Loaders
+# Bulk Rail Loaders (Continued)
+
+A Factorio 2.0 port of [Bulk Rail Loaders](https://github.com/mspielberg/factorio-railloader)
+by Therax, based on v1.1.6. This is a faithful port: gameplay, balance, and
+prototype names are unchanged from the original. See `NOTICE` for attribution
+and `changelog.txt` for the port details.
+
+**Save compatibility:** this release targets **new maps only**. Loading a
+Factorio 1.1 save through the 2.0 conversion is not supported yet — Factorio's
+own rail-system rewrite interacts with this mod's migrations in ways that have
+not been validated.
 
 This mod adds dedicated train loaders and unloaders for granular bulk cargo,
 as often used in reality at mines, power stations, etc.  A large hopper placed

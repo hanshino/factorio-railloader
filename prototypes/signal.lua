@@ -4,7 +4,7 @@ data:extend{
     name = "railloader-disable",
     icons = {
       {
-        icon = "__railloader__/graphics/icons/railloader.png",
+        icon = "__railloader-continued__/graphics/icons/railloader.png",
         icon_size = 32,
       },
       {

@@ -21,11 +21,7 @@ local function display_configuration_message(loader, items)
   for i, item in ipairs(items) do
     msg[i+1] = {"item-name." .. item}
   end
-  loader.surface.create_entity{
-    name = "flying-text",
-    position = loader.position,
-    text = msg,
-  }
+  util.flying_text(loader.surface, loader.position, msg)
 end
 
 local function inserter_configuration_changes(inserter, items)
@@ -35,13 +31,16 @@ local function inserter_configuration_changes(inserter, items)
   end
 
   for i=1,inserter.prototype.filter_count do
+    -- 2.0: get_filter returns an ItemFilter table ({name, quality, comparator}),
+    -- not a plain item name string
     local filter = inserter.get_filter(i)
-    if filter then
-      if not item_set[filter] then
+    local filter_name = filter and filter.name
+    if filter_name then
+      if not item_set[filter_name] then
         -- existing filter will be removed
         return true
       end
-      item_set[filter] = nil
+      item_set[filter_name] = nil
     end
   end
 
@@ -66,8 +65,11 @@ local function configure_loader_from_inventories(loader, inventories)
 
   for _, inserter in ipairs(inserters) do
     for i=1,inserter.prototype.filter_count do
-      inserter.set_filter(i, items[i])
+      inserter.set_filter(i, items[i] and {name = items[i]} or nil)
     end
+    -- 2.0 gates inserter filters behind use_filters, which defaults to false.
+    -- Without this the filters are stored but completely ignored.
+    inserter.use_filters = true
   end
 
   return true
@@ -138,21 +140,20 @@ end
 
 local function configure_inserter_control_behavior(inserter)
   local behavior = inserter.get_or_create_control_behavior()
+  -- 2.0: CircuitCondition is given directly, no longer wrapped in a "condition" table.
+  -- The wrapped form is silently accepted but drops first_signal.
   behavior.circuit_condition = {
-    condition = {
-      comparator = "=",
-      first_signal = {type = "virtual", name = "railloader-disable"},
-    }
+    comparator = "=",
+    first_signal = {type = "virtual", name = "railloader-disable"},
+    constant = 0,
   }
+  -- 2.0 requires this to be set explicitly; it defaults to false, which would make
+  -- the circuit condition (and therefore the disable signal) have no effect.
+  behavior.circuit_enable_disable = true
 end
 
 function M.connect_and_configure_inserter_control_behavior(inserter, chest)
-  for _, wire_type in ipairs{"red", "green"} do
-    inserter.connect_neighbour{
-      target_entity = chest,
-      wire = defines.wire_type[wire_type],
-    }
-  end
+  util.connect_circuit_wires(inserter, chest)
   configure_inserter_control_behavior(inserter)
 end
 
@@ -173,9 +174,7 @@ local function replace_all_inserters(universal)
         }
         replacement.destructible = false
         replacement.held_stack.swap_stack(e.held_stack)
-        for _, ccd in ipairs(e.circuit_connection_definitions) do
-          replacement.connect_neighbour(ccd)
-        end
+        util.copy_circuit_connections(e, replacement)
         configure_inserter_control_behavior(replacement)
 
         if not universal then

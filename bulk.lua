@@ -167,7 +167,10 @@ function M.acceptable_items(inventories, limit)
   local seen = {}
   local out = {}
   for _, inventory in pairs(inventories) do
-    for name in pairs(inventory.get_contents()) do
+    -- 2.0: get_contents() returns an array of {name = ..., count = ..., quality = ...}
+    -- rather than a name -> count map
+    for _, entry in pairs(inventory.get_contents()) do
+      local name = entry.name
       if is_acceptable_item(name) and not seen[name] then
         seen[name] = true -- prevent the same item from taking two slots
         out[#out+1] = name
